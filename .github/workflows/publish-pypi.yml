@@ -31,8 +31,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.os == 'linux' && 'x86_64' || '' }}
-          args: --release --out dist --find-interpreter
-          working-directory: tetanes-py
+          args: --release --out dist --find-interpreter --manifest-path tetanes-py/Cargo.toml
           sccache: 'true'
           manylinux: auto
 
@@ -40,7 +39,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: tetanes-py/dist
+          path: dist
 
   publish-test:
     name: Publish to TestPyPI
