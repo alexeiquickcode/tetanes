@@ -52,6 +52,7 @@ jobs:
         with:
           pattern: wheels-*
           path: dist
+          merge-multiple: true
 
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -59,6 +60,7 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
           skip-existing: true
+          attestations: false
 
   publish-prod:
     name: Publish to PyPI
@@ -77,3 +79,4 @@ jobs:
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
+          attestations: false
