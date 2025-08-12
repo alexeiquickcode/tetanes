@@ -56,15 +56,6 @@ for _ in range(1000):
 - NumPy
 - Gymnasium (optional, for RL environment)
 
-## Building from source
-
-Requires Rust toolchain:
-
-```bash
-cd tetanes-python
-maturin develop
-```
-
 ## License
 
 MIT OR Apache-2.0
