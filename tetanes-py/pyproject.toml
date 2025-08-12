@@ -8,7 +8,7 @@ description = "TetaNES-Py - Python bindings for the TetaNES NES emulator with Gy
 readme = "README.md"
 license = { text = "MIT OR Apache-2.0" }
 authors = [
-    { name = "TetaNES Contributors" }
+    { name = "Alexei Quick", email = "alexei.quick@gmail.com" }
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -39,7 +39,6 @@ dev = []
 examples = []
 
 [tool.maturin]
-module-name = "tetanes_py._tetanes" # Module name inside the package
+module-name = "tetanes_py._tetanes"
 python-source = "python" 
-# Build for Python 3.8+ with stable ABI
 features = ["pyo3/extension-module"]

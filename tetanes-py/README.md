@@ -40,7 +40,7 @@ Works with OpenAI Gym/Gymnasium for RL:
 import gymnasium as gym
 import tetanes_py
 
-env = gym.make("TetaNES-v0", rom_path="game.nes")
+env = gym.make("ExampleGame-v0", rom_path="game.nes")
 obs, info = env.reset()
 
 for _ in range(1000):
