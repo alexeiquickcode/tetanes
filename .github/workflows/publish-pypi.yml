@@ -14,7 +14,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.8'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -30,7 +29,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.os == 'linux' && 'x86_64' || '' }}
+          target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64' || '' }}
           args: --release --out dist --find-interpreter --manifest-path tetanes-py/Cargo.toml
           sccache: 'true'
           manylinux: auto
@@ -38,7 +37,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: wheels-${{ matrix.os }}
           path: dist
 
   publish-test:
