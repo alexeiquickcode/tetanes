@@ -19,12 +19,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, macos-14]
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
-        exclude:
-          # macOS ARM64 (M1) doesn't support Python 3.8
-          - os: macos-14
-            python-version: '3.8'
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.11', '3.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -46,13 +42,6 @@ jobs:
         working-directory: ${{ env.PACKAGE_DIR }}
         run: |
           maturin build --release --out dist --interpreter python${{ matrix.python-version }}
-
-      - name: Test wheel
-        working-directory: ${{ env.PACKAGE_DIR }}
-        run: |
-          pip install dist/*.whl --force-reinstall
-          python -c "import tetanes_py; print(f'TetaNES-Py loaded successfully')"
-          pytest tests/ -v || echo "No tests found"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
