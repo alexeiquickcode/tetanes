@@ -181,6 +181,23 @@ impl NesEnv {
 
         Ok(self.control_deck.cpu().peek(address))
     }
+
+    /// Set the frame speed for faster/slower emulation
+    fn set_frame_speed(&mut self, speed: f32) -> PyResult<()> {
+        if speed <= 0.0 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Frame speed must be positive"
+            ));
+        }
+
+        self.control_deck.set_frame_speed(speed);
+        Ok(())
+    }
+
+    /// Get the current frame speed
+    fn get_frame_speed(&self) -> f32 {
+        self.control_deck.frame_speed()
+    }
 }
 
 impl NesEnv {

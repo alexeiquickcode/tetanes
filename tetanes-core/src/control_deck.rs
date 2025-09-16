@@ -991,6 +991,12 @@ impl ControlDeck {
         self.cpu.bus.apu.set_frame_speed(speed);
     }
 
+    /// Get the current emulation speed.
+    #[inline]
+    pub const fn frame_speed(&self) -> f32 {
+        self.frame_speed
+    }
+
     /// Add a NES Game Genie code.
     ///
     /// # Errors
