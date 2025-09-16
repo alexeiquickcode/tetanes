@@ -23,9 +23,9 @@ impl NesEnv {
     fn new(headless: bool, frame_method: &str) -> PyResult<Self> {
         // Validate frame method
         match frame_method {
-            "rgb" | "rgb_fast" | "grayscale" => {},
+            "rgb" | "grayscale" => {},
             _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid frame_method '{}'. Valid options: 'rgb', 'rgb_fast', 'grayscale'", frame_method)
+                format!("Invalid frame_method '{}'. Valid options: 'rgb', 'grayscale'", frame_method)
             )),
         }
 
@@ -108,8 +108,7 @@ impl NesEnv {
         // Get observation based on configured method
         let observation = if render {
             match self.frame_method.as_str() {
-                "rgb" => self.get_observation()?,
-                "rgb_fast" => self.get_rgb_frame()?,
+                "rgb" => self.get_rgb_frame()?,
                 "grayscale" => self.get_grayscale_frame()?,
                 _ => unreachable!("frame_method should be validated in constructor"),
             }
@@ -132,29 +131,6 @@ impl NesEnv {
         Ok((observation, reward, terminated, truncated, info))
     }
 
-    /// Get current frame as RGB array
-    fn get_observation(&mut self) -> PyResult<PyObject> {
-        let frame_buffer = self.control_deck.frame_buffer();
-
-        Python::with_gil(|py| {
-            // Create 3D array directly without intermediate allocation
-            let mut reshaped = vec![vec![vec![0u8; 3]; 256]; 240];
-
-            // Convert RGBA to RGB and reshape in one pass
-            for (i, chunk) in frame_buffer.chunks_exact(4).enumerate() {
-                let y = i / 256;
-                let x = i % 256;
-                if y < 240 {
-                    reshaped[y][x][0] = chunk[0]; // R
-                    reshaped[y][x][1] = chunk[1]; // G
-                    reshaped[y][x][2] = chunk[2]; // B
-                }
-            }
-
-            let array = PyArray3::<u8>::from_vec3(py, &reshaped)?;
-            Ok(array.to_object(py))
-        })
-    }
 
     /// Save state to slot
     fn save_state(&mut self, slot: u8) -> PyResult<()> {
@@ -250,91 +226,22 @@ impl NesEnv {
         })
     }
 
-    /// Get RGB frame using lookup table - faster than current get_observation
+    /// Get RGB frame
     fn get_rgb_frame(&mut self) -> PyResult<PyObject> {
-        let frame_buffer = self.control_deck.frame_buffer_raw();
-
-        // NES palette RGB lookup table (standard NTSC palette)
-        const RGB_LUT: [(u8, u8, u8); 64] = [
-            (84, 84, 84),
-            (0, 30, 116),
-            (8, 16, 144),
-            (48, 0, 136),
-            (68, 0, 100),
-            (92, 0, 48),
-            (84, 4, 0),
-            (60, 24, 0),
-            (32, 42, 0),
-            (8, 58, 0),
-            (0, 64, 0),
-            (0, 60, 0),
-            (0, 50, 60),
-            (0, 0, 0),
-            (0, 0, 0),
-            (0, 0, 0),
-            (152, 150, 152),
-            (8, 76, 196),
-            (48, 50, 236),
-            (92, 30, 228),
-            (136, 20, 176),
-            (160, 20, 100),
-            (152, 34, 32),
-            (120, 60, 0),
-            (84, 90, 0),
-            (40, 114, 0),
-            (8, 124, 0),
-            (0, 118, 40),
-            (0, 102, 120),
-            (0, 0, 0),
-            (0, 0, 0),
-            (0, 0, 0),
-            (236, 238, 236),
-            (76, 154, 236),
-            (120, 124, 236),
-            (176, 98, 236),
-            (228, 84, 236),
-            (236, 88, 180),
-            (236, 106, 100),
-            (212, 136, 32),
-            (160, 170, 0),
-            (116, 196, 0),
-            (76, 208, 32),
-            (56, 204, 108),
-            (56, 180, 204),
-            (60, 60, 60),
-            (0, 0, 0),
-            (0, 0, 0),
-            (236, 238, 236),
-            (168, 204, 236),
-            (188, 188, 236),
-            (212, 178, 236),
-            (236, 174, 236),
-            (236, 174, 212),
-            (236, 180, 176),
-            (228, 196, 144),
-            (204, 210, 120),
-            (180, 222, 120),
-            (168, 226, 144),
-            (152, 226, 180),
-            (160, 214, 228),
-            (160, 162, 160),
-            (0, 0, 0),
-            (0, 0, 0),
-        ];
+        let frame_buffer = self.control_deck.frame_buffer();
 
         Python::with_gil(|py| {
-            // Create 3D array of RGB values
+            // Create 3D array directly without intermediate allocation
             let mut reshaped = vec![vec![vec![0u8; 3]; 256]; 240];
 
-            // Convert palette indices to RGB in one pass
-            for (i, &pixel_idx) in frame_buffer.iter().enumerate() {
+            // Convert RGBA to RGB and reshape in one pass
+            for (i, chunk) in frame_buffer.chunks_exact(4).enumerate() {
                 let y = i / 256;
                 let x = i % 256;
                 if y < 240 {
-                    let (r, g, b) = RGB_LUT[pixel_idx as usize & 0x3F];
-                    reshaped[y][x][0] = r;
-                    reshaped[y][x][1] = g;
-                    reshaped[y][x][2] = b;
+                    reshaped[y][x][0] = chunk[0]; // R
+                    reshaped[y][x][1] = chunk[1]; // G
+                    reshaped[y][x][2] = chunk[2]; // B
                 }
             }
 
