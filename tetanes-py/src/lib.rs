@@ -12,14 +12,23 @@ use tetanes_core::video::VideoFilter;
 pub struct NesEnv {
     control_deck: ControlDeck,
     rom_loaded: bool,
+    frame_method: String,
 }
 
 #[pymethods]
 #[allow(non_local_definitions)]
 impl NesEnv {
     #[new]
-    #[pyo3(signature = (headless = false))]
-    fn new(headless: bool) -> Self {
+    #[pyo3(signature = (headless = false, frame_method = "rgb"))]
+    fn new(headless: bool, frame_method: &str) -> PyResult<Self> {
+        // Validate frame method
+        match frame_method {
+            "rgb" | "rgb_fast" | "grayscale" => {},
+            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                format!("Invalid frame_method '{}'. Valid options: 'rgb', 'rgb_fast', 'grayscale'", frame_method)
+            )),
+        }
+
         let mut config = Config::default();
 
         // Always use optimized settings for RL
@@ -31,10 +40,11 @@ impl NesEnv {
 
         let control_deck = ControlDeck::with_config(config);
 
-        Self {
+        Ok(Self {
             control_deck,
             rom_loaded: false,
-        }
+            frame_method: frame_method.to_string(),
+        })
     }
 
     /// Load a ROM from bytes
@@ -95,9 +105,14 @@ impl NesEnv {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Emulation error: {e}"))
         })?;
 
-        // Get observation
+        // Get observation based on configured method
         let observation = if render {
-            self.get_observation()?
+            match self.frame_method.as_str() {
+                "rgb" => self.get_observation()?,
+                "rgb_fast" => self.get_rgb_frame()?,
+                "grayscale" => self.get_grayscale_frame()?,
+                _ => unreachable!("frame_method should be validated in constructor"),
+            }
         } else {
             Python::with_gil(|py| py.None())
         };
@@ -203,29 +218,6 @@ impl NesEnv {
         self.control_deck.frame_speed()
     }
 
-    /// Get raw frame buffer as u16 array (240x256) without filtering
-    fn get_raw_frame_buffer(&mut self) -> PyResult<PyObject> {
-        let frame_buffer = self.control_deck.frame_buffer_raw();
-
-        Python::with_gil(|py| {
-            // Create 2D array of u16 values
-            let mut reshaped = vec![vec![0u16; 256]; 240];
-
-            // Copy raw PPU buffer
-            for (i, &pixel) in frame_buffer.iter().enumerate() {
-                let y = i / 256;
-                let x = i % 256;
-                if y < 240 {
-                    reshaped[y][x] = pixel;
-                }
-            }
-
-            // Convert to numpy array
-            use numpy::PyArray2;
-            let array = PyArray2::<u16>::from_vec2(py, &reshaped)?;
-            Ok(array.to_object(py))
-        })
-    }
 
     /// Get grayscale frame as u8 array (240x256) - fastest method for RL
     fn get_grayscale_frame(&mut self) -> PyResult<PyObject> {
