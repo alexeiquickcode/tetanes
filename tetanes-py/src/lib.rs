@@ -5,6 +5,7 @@ use std::io::Cursor;
 use tetanes_core::input::JoypadBtnState;
 use tetanes_core::mem::Read;
 use tetanes_core::prelude::*;
+use tetanes_core::video::VideoFilter;
 
 /// NES Emulator Environment for Reinforcement Learning
 #[pyclass]
@@ -20,6 +21,9 @@ impl NesEnv {
     #[pyo3(signature = (headless = false))]
     fn new(headless: bool) -> Self {
         let mut config = Config::default();
+
+        // Always use optimized settings for RL
+        config.filter = VideoFilter::Pixellate;
 
         if headless {
             config.headless_mode = HeadlessMode::NO_AUDIO | HeadlessMode::NO_VIDEO;
@@ -186,7 +190,7 @@ impl NesEnv {
     fn set_frame_speed(&mut self, speed: f32) -> PyResult<()> {
         if speed <= 0.0 {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Frame speed must be positive"
+                "Frame speed must be positive",
             ));
         }
 
@@ -197,6 +201,154 @@ impl NesEnv {
     /// Get the current frame speed
     fn get_frame_speed(&self) -> f32 {
         self.control_deck.frame_speed()
+    }
+
+    /// Get raw frame buffer as u16 array (240x256) without filtering
+    fn get_raw_frame_buffer(&mut self) -> PyResult<PyObject> {
+        let frame_buffer = self.control_deck.frame_buffer_raw();
+
+        Python::with_gil(|py| {
+            // Create 2D array of u16 values
+            let mut reshaped = vec![vec![0u16; 256]; 240];
+
+            // Copy raw PPU buffer
+            for (i, &pixel) in frame_buffer.iter().enumerate() {
+                let y = i / 256;
+                let x = i % 256;
+                if y < 240 {
+                    reshaped[y][x] = pixel;
+                }
+            }
+
+            // Convert to numpy array
+            use numpy::PyArray2;
+            let array = PyArray2::<u16>::from_vec2(py, &reshaped)?;
+            Ok(array.to_object(py))
+        })
+    }
+
+    /// Get grayscale frame as u8 array (240x256) - fastest method for RL
+    fn get_grayscale_frame(&mut self) -> PyResult<PyObject> {
+        let frame_buffer = self.control_deck.frame_buffer_raw();
+
+        // NES palette grayscale lookup table (approximate luminance values)
+        const GRAYSCALE_LUT: [u8; 64] = [
+            84, 84, 84, 84, 84, 84, 84, 84, 84, 84, 84, 84, 84, 0, 0, 0, 152, 152, 152, 152, 152,
+            152, 152, 152, 152, 152, 152, 152, 152, 0, 0, 0, 220, 220, 220, 220, 220, 220, 220,
+            220, 220, 220, 220, 220, 220, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+            255, 255, 255, 255, 0, 0, 0,
+        ];
+
+        Python::with_gil(|py| {
+            // Create 2D array of u8 grayscale values
+            let mut reshaped = vec![vec![0u8; 256]; 240];
+
+            // Convert palette indices to grayscale in one pass
+            for (i, &pixel_idx) in frame_buffer.iter().enumerate() {
+                let y = i / 256;
+                let x = i % 256;
+                if y < 240 {
+                    reshaped[y][x] = GRAYSCALE_LUT[pixel_idx as usize & 0x3F];
+                }
+            }
+
+            use numpy::PyArray2;
+            let array = PyArray2::<u8>::from_vec2(py, &reshaped)?;
+            Ok(array.to_object(py))
+        })
+    }
+
+    /// Get RGB frame using lookup table - faster than current get_observation
+    fn get_rgb_frame(&mut self) -> PyResult<PyObject> {
+        let frame_buffer = self.control_deck.frame_buffer_raw();
+
+        // NES palette RGB lookup table (standard NTSC palette)
+        const RGB_LUT: [(u8, u8, u8); 64] = [
+            (84, 84, 84),
+            (0, 30, 116),
+            (8, 16, 144),
+            (48, 0, 136),
+            (68, 0, 100),
+            (92, 0, 48),
+            (84, 4, 0),
+            (60, 24, 0),
+            (32, 42, 0),
+            (8, 58, 0),
+            (0, 64, 0),
+            (0, 60, 0),
+            (0, 50, 60),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (152, 150, 152),
+            (8, 76, 196),
+            (48, 50, 236),
+            (92, 30, 228),
+            (136, 20, 176),
+            (160, 20, 100),
+            (152, 34, 32),
+            (120, 60, 0),
+            (84, 90, 0),
+            (40, 114, 0),
+            (8, 124, 0),
+            (0, 118, 40),
+            (0, 102, 120),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (236, 238, 236),
+            (76, 154, 236),
+            (120, 124, 236),
+            (176, 98, 236),
+            (228, 84, 236),
+            (236, 88, 180),
+            (236, 106, 100),
+            (212, 136, 32),
+            (160, 170, 0),
+            (116, 196, 0),
+            (76, 208, 32),
+            (56, 204, 108),
+            (56, 180, 204),
+            (60, 60, 60),
+            (0, 0, 0),
+            (0, 0, 0),
+            (236, 238, 236),
+            (168, 204, 236),
+            (188, 188, 236),
+            (212, 178, 236),
+            (236, 174, 236),
+            (236, 174, 212),
+            (236, 180, 176),
+            (228, 196, 144),
+            (204, 210, 120),
+            (180, 222, 120),
+            (168, 226, 144),
+            (152, 226, 180),
+            (160, 214, 228),
+            (160, 162, 160),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+
+        Python::with_gil(|py| {
+            // Create 3D array of RGB values
+            let mut reshaped = vec![vec![vec![0u8; 3]; 256]; 240];
+
+            // Convert palette indices to RGB in one pass
+            for (i, &pixel_idx) in frame_buffer.iter().enumerate() {
+                let y = i / 256;
+                let x = i % 256;
+                if y < 240 {
+                    let (r, g, b) = RGB_LUT[pixel_idx as usize & 0x3F];
+                    reshaped[y][x][0] = r;
+                    reshaped[y][x][1] = g;
+                    reshaped[y][x][2] = b;
+                }
+            }
+
+            let array = PyArray3::<u8>::from_vec3(py, &reshaped)?;
+            Ok(array.to_object(py))
+        })
     }
 }
 
@@ -234,4 +386,3 @@ fn _tetanes(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<NesEnv>()?;
     Ok(())
 }
-
