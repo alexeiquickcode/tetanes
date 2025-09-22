@@ -177,6 +177,25 @@ impl NesEnv {
         Ok(self.control_deck.cpu().peek(address))
     }
 
+    /// Read a single byte from PRG ROM
+    fn read_prg_rom(&self, address: u16) -> PyResult<u8> {
+        if !self.rom_loaded {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "No ROM loaded",
+            ));
+        }
+
+        let prg_rom = &self.control_deck.bus().prg_rom;
+        if address as usize >= prg_rom.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "PRG ROM address {address:#x} out of bounds (ROM size: {:#x})",
+                prg_rom.len()
+            )));
+        }
+
+        Ok(prg_rom[address as usize])
+    }
+
     /// Set the frame speed for faster/slower emulation
     fn set_frame_speed(&mut self, speed: f32) -> PyResult<()> {
         if speed <= 0.0 {
