@@ -196,6 +196,25 @@ impl NesEnv {
         Ok(prg_rom[address as usize])
     }
 
+    /// Read a single byte from SRAM (Save RAM/Battery-backed RAM)
+    fn read_sram(&self, address: u16) -> PyResult<u8> {
+        if !self.rom_loaded {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "No ROM loaded",
+            ));
+        }
+
+        let sram = self.control_deck.bus().sram();
+        if address as usize >= sram.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "SRAM address {address:#x} out of bounds (SRAM size: {:#x})",
+                sram.len()
+            )));
+        }
+
+        Ok(sram[address as usize])
+    }
+
     /// Set the frame speed for faster/slower emulation
     fn set_frame_speed(&mut self, speed: f32) -> PyResult<()> {
         if speed <= 0.0 {
