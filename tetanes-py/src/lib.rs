@@ -215,6 +215,30 @@ impl NesEnv {
         Ok(sram[address as usize])
     }
 
+    /// Read a single byte from PPU memory
+    /// PPU memory space: $0000-$3FFF (16KB)
+    /// - $0000-$1FFF: CHR ROM/RAM (8KB)
+    /// - $2000-$2FFF: Nametables (4KB)
+    /// - $3000-$3EFF: Mirrors of $2000-$2EFF
+    /// - $3F00-$3FFF: Palette RAM indexes and mirrors
+    fn read_ppu(&self, address: u16) -> PyResult<u8> {
+        if !self.rom_loaded {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "No ROM loaded",
+            ));
+        }
+
+        if address > 0x3FFF {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "PPU address {address:#x} out of bounds (must be <= 0x3FFF)"
+            )));
+        }
+
+        // Access PPU bus and read the value
+        // Using peek to avoid side effects
+        Ok(self.control_deck.cpu().bus.ppu.bus.peek(address))
+    }
+
     /// Set the frame speed for faster/slower emulation
     fn set_frame_speed(&mut self, speed: f32) -> PyResult<()> {
         if speed <= 0.0 {
