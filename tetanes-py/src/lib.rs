@@ -256,6 +256,45 @@ impl NesEnv {
         self.control_deck.frame_speed()
     }
 
+    /// Read a single byte from OAM (Object Attribute Memory) RAM
+    /// OAM stores sprite data: 256 bytes total, 64 sprites * 4 bytes each
+    /// Each sprite: [Y position, Tile index, Attributes, X position]
+    fn read_oam(&self, address: u8) -> PyResult<u8> {
+        if !self.rom_loaded {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "No ROM loaded",
+            ));
+        }
+
+        Ok(self.control_deck.cpu().bus.ppu.oamdata[address as usize])
+    }
+
+    /// Read a complete sprite from OAM RAM
+    /// Returns tuple: (y_position, tile_index, attributes, x_position)
+    /// sprite_index: 0-63 (there are 64 sprites in OAM)
+    fn read_oam_sprite(&self, sprite_index: u8) -> PyResult<(u8, u8, u8, u8)> {
+        if !self.rom_loaded {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "No ROM loaded",
+            ));
+        }
+
+        if sprite_index >= 64 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Sprite index {sprite_index} out of bounds (must be 0-63)"
+            )));
+        }
+
+        let base_addr = (sprite_index as usize) * 4;
+        let oamdata = &self.control_deck.cpu().bus.ppu.oamdata;
+
+        Ok((
+            oamdata[base_addr],     // Y position
+            oamdata[base_addr + 1], // Tile index
+            oamdata[base_addr + 2], // Attributes
+            oamdata[base_addr + 3], // X position
+        ))
+    }
 
     /// Get grayscale frame as u8 array (240x256) - fastest method for RL
     fn get_grayscale_frame(&mut self) -> PyResult<PyObject> {
